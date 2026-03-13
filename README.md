@@ -1,5 +1,7 @@
 # Ditec ION4 / ION6 Gate — Home Assistant Integration via ESP32
 
+![Ditec Gate in Home Assistant](screen.png)
+
 Connect your **Ditec ION4B or ION6B** sliding gate to **Home Assistant** using an ESP32 as a permanent BLE-to-MQTT bridge. No cloud, no subscription — local control with full position tracking, auto-discovery, and MQTT.
 
 ```

@@ -1,3 +1,8 @@
+# ESPHome package: BLE pairing, GATT server and entities for the Ditec ION4B / ION6B.
+# Not a standalone config - include it from esphome.yaml via `packages:` (see README.md).
+# Expects the substitutions ditec_gate_mac and ditec_gate_pin, and the `ditec_ion` external
+# component, to be provided by the including file.
+
 # ---------------------------------------------------------------------------------------------
 # Bluetooth: LE Secure Connections + MITM + bonding, passkey entry (matches the original
 # NimBLE setup: KeyboardDisplay, AuthReq 0x0D).

@@ -1,18 +1,21 @@
 # Ditec ION4B / ION6B (RCB100 BLE module) -> Home Assistant, as a native ESPHome device.
 #
-# Uses the `ditec_ion` ESPHome external component from this repository (components/ditec_ion/).
-# Protocol constants and frame layouts come from trapacska/ditec-ion-gate-home-assistant.
+# Example configuration for end users: copy this file into your ESPHome dashboard, fill in
+# secrets.yaml, install. All gate logic lives in this repository:
+#   - components/ditec_ion/   the `ditec_ion` cover component (loaded via external_components)
+#   - ditec-ion-gate.yaml     the BLE pairing / GATT server / entities (loaded via packages)
 #
-# STATUS: written against the ESPHome source. It has NOT been compiled by ESPHome and has NOT
-# been tested on a real gate. See "Bring-up" at the bottom before trusting it.
+# Original protocol work: trapacska/ditec-ion-gate-home-assistant
+#   https://github.com/trapacska/ditec-ion-gate-home-assistant
 #
 # secrets.yaml needs:
-#   wifi_ssid, wifi_password, api_key, ota_password,
-#   ditec_gate_mac   "00:60:37:XX:XX:XX"   (Ditec Gate Connect app -> Info)
-#   ditec_gate_pin   123456                (the PIN you set in the Ditec Gate Connect app)
+#   wifi_ssid, wifi_password,
+#   ditec_gate__api_key   ESPHome API encryption key
+#   ditec_gate__mac       "00:60:37:XX:XX:XX"   (Ditec Gate Connect app -> Info)
+#   ditec_gate__pin       123456                (the PIN you set in the Ditec Gate Connect app)
 #
-# One-time prerequisite (same as the original project): press the button on the motor, open
-# Ditec Gate Connect, and set a PIN so the gate switches from temporary access to PIN pairing.
+# One-time prerequisite: press the button on the motor, open Ditec Gate Connect and set a PIN,
+# so the gate switches from temporary access to PIN pairing (see README.md).
 
 substitutions:
   name: ditec-gate
@@ -21,12 +24,11 @@ substitutions:
   ditec_gate_pin: !secret ditec_gate__pin
 
 # Load the component from your GitHub repository. components/ditec_ion/ must be at the repo root.
-# Replace YOUR_GITHUB_USER / YOUR_REPO (pin with @branch or @tag).
 external_components:
   - source: github://boroczkigabor/esphome-ditec-ion-gate@main
     components: [ditec_ion]
     refresh: 1d
-  # While developing, use the local checkout instead (path is relative to this YAML file):
+  # Developing the component? Use a local checkout instead (path relative to this YAML file):
   # - source:
   #     type: local
   #     path: components
@@ -36,7 +38,7 @@ packages:
   remote_package:
     url: https://github.com/boroczkigabor/esphome-ditec-ion-gate/
     ref: main
-    refresh: always
+    refresh: 1d
     files: [
       ditec-ion-gate.yaml
     ]

@@ -17,6 +17,8 @@
 substitutions:
   name: ditec-gate
   friendly_name: Ditec Gate
+  ditec_gate_mac: !secret ditec_gate__mac
+  ditec_gate_pin: !secret ditec_gate__pin
 
 # Load the component from your GitHub repository. components/ditec_ion/ must be at the repo root.
 # Replace YOUR_GITHUB_USER / YOUR_REPO (pin with @branch or @tag).
@@ -37,7 +39,7 @@ packages:
     refresh: always
     files: [
       ditec-ion-gate.yaml
-   ]
+    ]
 
 esphome:
   name: ${name}
@@ -59,7 +61,7 @@ logger:
 
 api:
   encryption:
-    key: !secret api_key
+    key: !secret ditec_gate__api_key
 
 ota:
   - platform: esphome

@@ -10,7 +10,7 @@ esp32_ble_tracker:
 
 ble_client:
   - id: gate_client
-    mac_address: !secret ditec_gate_mac
+    mac_address: ${ditec_gate_mac}
     auto_connect: true
     on_connect:
       - logger.log: "Gate: connected (service discovery complete)"
@@ -20,7 +20,7 @@ ble_client:
       - logger.log: "Gate: passkey requested, answering with the PIN"
       - ble_client.passkey_reply:
           id: gate_client
-          passkey: !secret ditec_gate_pin
+          passkey: ${ditec_gate_pin}
     on_passkey_notification:
       - logger.log:
           format: "Gate: passkey notification %06u"

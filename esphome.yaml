@@ -1,0 +1,70 @@
+# Ditec ION4B / ION6B (RCB100 BLE module) -> Home Assistant, as a native ESPHome device.
+#
+# Uses the `ditec_ion` ESPHome external component from this repository (components/ditec_ion/).
+# Protocol constants and frame layouts come from trapacska/ditec-ion-gate-home-assistant.
+#
+# STATUS: written against the ESPHome source. It has NOT been compiled by ESPHome and has NOT
+# been tested on a real gate. See "Bring-up" at the bottom before trusting it.
+#
+# secrets.yaml needs:
+#   wifi_ssid, wifi_password, api_key, ota_password,
+#   ditec_gate_mac   "00:60:37:XX:XX:XX"   (Ditec Gate Connect app -> Info)
+#   ditec_gate_pin   123456                (the PIN you set in the Ditec Gate Connect app)
+#
+# One-time prerequisite (same as the original project): press the button on the motor, open
+# Ditec Gate Connect, and set a PIN so the gate switches from temporary access to PIN pairing.
+
+substitutions:
+  name: ditec-gate
+  friendly_name: Ditec Gate
+
+# Load the component from your GitHub repository. components/ditec_ion/ must be at the repo root.
+# Replace YOUR_GITHUB_USER / YOUR_REPO (pin with @branch or @tag).
+external_components:
+  - source: github://boroczkigabor/esphome-ditec-ion-gate@main
+    components: [ditec_ion]
+    refresh: 1d
+  # While developing, use the local checkout instead (path is relative to this YAML file):
+  # - source:
+  #     type: local
+  #     path: components
+  #   components: [ditec_ion]
+
+packages:
+  remote_package:
+    url: https://github.com/boroczkigabor/esphome-ditec-ion-gate/
+    ref: main
+    refresh: always
+    files: [
+      ditec-ion-gate.yaml
+   ]
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+  # While bringing the link up, uncomment for the full GATT / SMP trace:
+  # logs:
+  #   esp32_ble_client: VERBOSE
+  #   ble_client: VERBOSE
+  #   esp32_ble_server: VERBOSE
+  #   ditec_ion: VERBOSE
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password

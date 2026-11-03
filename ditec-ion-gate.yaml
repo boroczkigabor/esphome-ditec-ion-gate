@@ -1,0 +1,142 @@
+# ---------------------------------------------------------------------------------------------
+# Bluetooth: LE Secure Connections + MITM + bonding, passkey entry (matches the original
+# NimBLE setup: KeyboardDisplay, AuthReq 0x0D).
+# ---------------------------------------------------------------------------------------------
+esp32_ble:
+  io_capability: keyboard_display
+  auth_req_mode: sc_mitm_bond
+
+esp32_ble_tracker:
+
+ble_client:
+  - id: gate_client
+    mac_address: !secret ditec_gate_mac
+    auto_connect: true
+    on_connect:
+      - logger.log: "Gate: connected (service discovery complete)"
+    on_disconnect:
+      - logger.log: "Gate: disconnected"
+    on_passkey_request:
+      - logger.log: "Gate: passkey requested, answering with the PIN"
+      - ble_client.passkey_reply:
+          id: gate_client
+          passkey: !secret ditec_gate_pin
+    on_passkey_notification:
+      - logger.log:
+          format: "Gate: passkey notification %06u"
+          args: ["(unsigned) passkey"]
+
+# The gate pushes its status frames by WRITING to this characteristic on the ESP32's own GATT
+# server (the original project never subscribes to notifications on the gate). Every frame is
+# handed to the component, which parses it.
+esp32_ble_server:
+  id: ble_server
+  services:
+    - uuid: "01FF0100-BA5E-F4EE-5CA1-EB1E5E4B1CE0"
+      advertise: false
+      characteristics:
+        - uuid: "01FF0101-BA5E-F4EE-5CA1-EB1E5E4B1CE0"
+          read: true
+          write: true
+          write_no_response: true
+          # Hardening for later, once everything works: only accept writes over the encrypted,
+          # bonded link so a stranger's phone cannot inject fake "gate closed" frames.
+          # write_encrypt: true
+          on_write:
+            then:
+              - lambda: |-
+                  id(gate).handle_frame(x);
+
+# ---------------------------------------------------------------------------------------------
+# Entities
+# ---------------------------------------------------------------------------------------------
+cover:
+  - platform: ditec_ion
+    id: gate
+    name: None
+    ble_client_id: gate_client
+    # notify: true   # only if the gate's characteristic has Notify (see Bring-up, step 2)
+    operation_counter:
+      name: "Operation counter"
+    partial_open_position:
+      name: "Partial open position"
+    auto_close_timer:
+      name: "Auto close timer"
+    auto_close:
+      name: "Auto close"
+    board_info:
+      name: "Controller board"
+
+button:
+  - platform: template
+    name: "Light"
+    icon: mdi:lightbulb
+    on_press:
+      - lambda: 'id(gate).command_toggle_light();'
+  - platform: template
+    name: "Partial open"
+    icon: mdi:gate-open
+    on_press:
+      - lambda: 'id(gate).command_partial_open();'
+  # Clears the stored bond and reconnects (use after changing the PIN in the app).
+  - platform: template
+    name: "Delete pairing"
+    icon: mdi:bluetooth-off
+    entity_category: config
+    on_press:
+      - ble_client.disconnect: gate_client
+      - delay: 1s
+      - ble_client.remove_bond:
+          id: gate_client
+      - delay: 1s
+      - ble_client.connect: gate_client
+
+switch:
+  - platform: ble_client
+    ble_client_id: gate_client
+    name: "BLE connection"
+    entity_category: config
+
+binary_sensor:
+  - platform: template
+    name: "BLE connected"
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: 'return id(gate_client).connected();'
+
+sensor:
+  - platform: ble_client
+    ble_client_id: gate_client
+    type: rssi
+    name: "BLE signal"
+    entity_category: diagnostic
+    update_interval: 15s
+  - platform: wifi_signal
+    name: "Wi-Fi signal"
+    entity_category: diagnostic
+    update_interval: 60s
+
+text_sensor:
+  - platform: ble_client
+    ble_client_id: gate_client
+    name: "Module firmware"
+    service_uuid: "180A"
+    characteristic_uuid: "2A26"
+    entity_category: diagnostic
+    update_interval: 300s
+
+# ---------------------------------------------------------------------------------------------
+# Bring-up (do these in order; the logs tell you which assumption failed)
+#   1. Flash, watch the log. Expect: connect -> "passkey requested" -> pairing OK ->
+#      "Gate characteristic found" -> "Status 0x.." lines. Status frames arriving = the reverse
+#      GATT path (gate writes to our server) works.
+#   2. Connected and encrypted but NO "Status" / "RX" lines and the cover never moves off its
+#      initial state: the gate is not writing into the ESP32's GATT server over this connection
+#      (an ESP-IDF Bluedroid limitation I could not rule out from the source). Check with
+#      nRF Connect whether the gate's characteristic has Notify; if it does, set `notify: true`
+#      on the cover and the component feeds notifications into the same parser.
+#   3. Pairing fails: check the PIN, press "Delete pairing", and compare the log with the
+#      NimBLE project's behaviour (it additionally distributes the LINK key, which ESPHome
+#      does not expose).
+#   4. After a gate power cycle the position is uncalibrated until one full open + close.
+# ---------------------------------------------------------------------------------------------

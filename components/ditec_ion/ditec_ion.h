@@ -41,6 +41,8 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   void command_toggle_light();
 
   void set_notify(bool notify) { this->notify_ = notify; }
+  void set_reconnect_min_interval(uint32_t ms) { this->reconnect_min_ms_ = ms; }
+  void set_reconnect_max_interval(uint32_t ms) { this->reconnect_max_ms_ = ms; }
   void set_operation_counter_sensor(sensor::Sensor *s) { this->operation_counter_ = s; }
   void set_partial_open_position_sensor(sensor::Sensor *s) { this->partial_open_position_ = s; }
   void set_auto_close_timer_sensor(sensor::Sensor *s) { this->auto_close_timer_ = s; }
@@ -57,6 +59,7 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   void pump_tx_();
   void reset_link_state_();
   void update_cover_();
+  void reconnect_tick_();
 
   // Gate state from the last status (0x34) and position (0x3F) frames.
   uint8_t gate_status_{0x01};  // 0x01 = closed
@@ -82,6 +85,14 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   bool have_sysinfo_{false};
   bool have_config_{false};
   bool published_{false};  // cover state published at least once
+
+  // Reconnect back-off (the ble_client must have auto_connect: false; we connect it ourselves).
+  uint32_t reconnect_min_ms_{5000};
+  uint32_t reconnect_max_ms_{300000};
+  uint32_t reconnect_backoff_ms_{5000};
+  uint32_t next_connect_{0};
+  bool connect_pending_{false};
+  bool last_link_good_{false};  // the previous link delivered at least one valid frame
 
   sensor::Sensor *operation_counter_{nullptr};
   sensor::Sensor *partial_open_position_{nullptr};

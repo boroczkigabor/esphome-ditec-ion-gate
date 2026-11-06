@@ -13,6 +13,8 @@ CONF_PARTIAL_OPEN_POSITION = "partial_open_position"
 CONF_AUTO_CLOSE_TIMER = "auto_close_timer"
 CONF_AUTO_CLOSE = "auto_close"
 CONF_BOARD_INFO = "board_info"
+CONF_RECONNECT_MIN_INTERVAL = "reconnect_min_interval"
+CONF_RECONNECT_MAX_INTERVAL = "reconnect_max_interval"
 
 DitecIonCover = ditec_ion_ns.class_(
     "DitecIonCover", cover.Cover, cg.Component, ble_client.BLEClientNode
@@ -20,12 +22,20 @@ DitecIonCover = ditec_ion_ns.class_(
 
 CONFIG_SCHEMA = (
     cover.cover_schema(DitecIonCover, device_class="gate")
-    .extend(
+        .extend(
         {
             # Also subscribe to notifications on the gate's characteristic (if it has the Notify
             # property) and feed them to the same frame parser. Off by default: the original
             # project receives frames only via the ESP32's own GATT server (esp32_ble_server).
             cv.Optional(CONF_NOTIFY, default=False): cv.boolean,
+            # Back-off between connection attempts. The attached ble_client must be configured with
+            # `auto_connect: false`; this component then connects it itself.
+            cv.Optional(
+                CONF_RECONNECT_MIN_INTERVAL, default="5s"
+            ): cv.positive_time_period_milliseconds,
+            cv.Optional(
+                CONF_RECONNECT_MAX_INTERVAL, default="5min"
+            ): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_OPERATION_COUNTER): sensor.sensor_schema(
                 accuracy_decimals=0,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
@@ -47,8 +57,8 @@ CONFIG_SCHEMA = (
             ),
         }
     )
-    .extend(ble_client.BLE_CLIENT_SCHEMA)
-    .extend(cv.COMPONENT_SCHEMA)
+        .extend(ble_client.BLE_CLIENT_SCHEMA)
+        .extend(cv.COMPONENT_SCHEMA)
 )
 
 
@@ -58,6 +68,8 @@ async def to_code(config):
     await ble_client.register_ble_node(var, config)
 
     cg.add(var.set_notify(config[CONF_NOTIFY]))
+    cg.add(var.set_reconnect_min_interval(config[CONF_RECONNECT_MIN_INTERVAL]))
+    cg.add(var.set_reconnect_max_interval(config[CONF_RECONNECT_MAX_INTERVAL]))
 
     if conf := config.get(CONF_OPERATION_COUNTER):
         sens = await sensor.new_sensor(conf)

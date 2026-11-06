@@ -1,4 +1,5 @@
 #include "ditec_ion.h"
+#include <algorithm>
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -66,12 +67,47 @@ static const size_t TX_QUEUE_MAX = 8;
 void DitecIonCover::setup() {
   this->position = cover::COVER_CLOSED;
   this->current_operation = cover::COVER_OPERATION_IDLE;
+  this->reconnect_backoff_ms_ = this->reconnect_min_ms_;
   this->set_interval("ditec_poll", POLL_TICK_MS, [this]() { this->poll_tick_(); });
+  this->set_interval("ditec_reconnect", 1000, [this]() { this->reconnect_tick_(); });
+}
+
+// Connects the ble_client ourselves, with exponential back-off, so a gate that is out of range or
+// refuses pairing is not hammered with connection attempts. After a link that worked (at least one
+// valid frame was received) the next attempt is made after the minimum interval.
+void DitecIonCover::reconnect_tick_() {
+  auto *client = this->parent();
+  if (!client->enabled || client->state() != espbt::ClientState::IDLE) {
+    this->connect_pending_ = false;
+    return;
+  }
+  const uint32_t now = millis();
+  if (!this->connect_pending_) {
+    uint32_t delay;
+    if (this->last_link_good_) {
+      this->reconnect_backoff_ms_ = this->reconnect_min_ms_;
+      delay = this->reconnect_min_ms_;
+    } else {
+      delay = this->reconnect_backoff_ms_;
+      this->reconnect_backoff_ms_ = std::min(this->reconnect_backoff_ms_ * 2, this->reconnect_max_ms_);
+    }
+    this->last_link_good_ = false;
+    this->next_connect_ = now + delay;
+    this->connect_pending_ = true;
+    ESP_LOGD(TAG, "Next connection attempt in %u ms", (unsigned) delay);
+    return;
+  }
+  if ((int32_t) (now - this->next_connect_) >= 0) {
+    this->connect_pending_ = false;
+    client->connect();
+  }
 }
 
 void DitecIonCover::dump_config() {
   LOG_COVER("", "Ditec ION Cover", this);
   ESP_LOGCONFIG(TAG, "  Notifications: %s", YESNO(this->notify_));
+  ESP_LOGCONFIG(TAG, "  Reconnect interval: %u ms .. %u ms", (unsigned) this->reconnect_min_ms_,
+                (unsigned) this->reconnect_max_ms_);
 }
 
 cover::CoverTraits DitecIonCover::get_traits() {
@@ -255,6 +291,7 @@ void DitecIonCover::handle_frame(const uint8_t *d, size_t n) {
   if (n < 2)
     return;
   ESP_LOGV(TAG, "RX %s", format_hex_pretty(d, n).c_str());
+  this->last_link_good_ = true;
 
   switch (d[0]) {
     case FRAME_STATUS: {

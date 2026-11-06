@@ -135,6 +135,16 @@ After changing the PIN in the app, or if pairing is stuck on an old bond: press 
 pairing** (it disconnects, removes the bond and reconnects), and check that `ditec_gate__pin` is
 correct.
 
+## Reconnecting
+
+The `ble_client` is set to `auto_connect: false` and the component connects it itself, with back-off,
+so a gate that is out of range or refuses pairing is not flooded with connection attempts (a
+stuck ESP32 can occupy the gate's single Bluetooth connection and lock your phone out). After a
+failed attempt the wait doubles, from `reconnect_min_interval` (default 5 s) up to
+`reconnect_max_interval` (default 5 min). After a link that worked, the next attempt happens after
+the minimum interval. Keep `auto_connect: false` in your `ble_client`; the **BLE connection**
+switch still turns connecting on and off.
+
 ## Signal strength
 
 Put the ESP32 in clear line of sight of the gate motor and with good Wi-Fi. A poor BLE link causes
@@ -177,5 +187,6 @@ bonded, encrypted link is accepted. Older versions reject the option as invalid.
 
 No license is set yet. The protocol knowledge comes from
 [trapacska/ditec-ion-gate-home-assistant](https://github.com/trapacska/ditec-ion-gate-home-assistant);
+check its terms before choosing a license for this repository.
 
 *Not affiliated with Ditec / Entrematic. Use at your own risk: this controls a motorised gate.*

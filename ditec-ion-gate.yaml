@@ -16,7 +16,9 @@ esp32_ble_tracker:
 ble_client:
   - id: gate_client
     mac_address: ${ditec_gate_mac}
-    auto_connect: true
+    # The ditec_ion component connects (and reconnects, with back-off) itself, so that a gate that
+    # is out of range or refuses pairing is not flooded with connection attempts. Keep this false.
+    auto_connect: false
     on_connect:
       - logger.log: "Gate: connected (service discovery complete)"
     on_disconnect:
@@ -61,6 +63,8 @@ cover:
     id: gate
     name: None
     ble_client_id: gate_client
+    # reconnect_min_interval: 5s    # wait before retrying; doubles after each failed attempt ...
+    # reconnect_max_interval: 5min  # ... up to this
     # notify: true   # only if the gate's characteristic has Notify (see Bring-up, step 2)
     operation_counter:
       name: "Operation counter"

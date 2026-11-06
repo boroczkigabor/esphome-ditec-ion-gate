@@ -44,9 +44,10 @@ esp32_ble_server:
           read: true
           write: true
           write_no_response: true
-          # Hardening for later, once everything works: only accept writes over the encrypted,
-          # bonded link so a stranger's phone cannot inject fake "gate closed" frames.
-          write_encrypt: true
+          # Hardening: only accept writes over the encrypted, bonded link so a stranger's phone
+          # cannot inject fake "gate closed" frames. Needs an ESPHome release that has this
+          # option (2026.11 or newer); older versions reject it as an invalid option.
+          # write_encrypt: true
           on_write:
             then:
               - lambda: |-

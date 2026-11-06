@@ -81,6 +81,7 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   uint8_t init_tries_{0};
   bool have_sysinfo_{false};
   bool have_config_{false};
+  bool published_{false};  // cover state published at least once
 
   sensor::Sensor *operation_counter_{nullptr};
   sensor::Sensor *partial_open_position_{nullptr};

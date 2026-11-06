@@ -160,9 +160,10 @@ Raise the log level to see the Bluetooth trace (see the commented `logs:` block 
 
 ## Security note
 
-The ESP32's GATT server accepts the gate's status writes. By default any BLE device could write
-to it. Once everything works, enable `write_encrypt: true` on the characteristic in
-`ditec-ion-gate.yaml` (commented there) so only the bonded, encrypted link is accepted.
+The ESP32's GATT server accepts the gate's status writes. By default any BLE device in range could
+write to it. On an ESPHome release that supports it (2026.11 or newer), enable
+`write_encrypt: true` on the characteristic in `ditec-ion-gate.yaml` (commented there) so only the
+bonded, encrypted link is accepted. Older versions reject the option as invalid.
 
 ## Repository layout
 

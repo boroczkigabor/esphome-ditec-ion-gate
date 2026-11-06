@@ -10,6 +10,21 @@ namespace ditec_ion {
 
 static const char *const TAG = "ditec_ion";
 
+// The gate is polled about once a second; only publish when a value actually changed so Home
+// Assistant (and anything exporting its states) is not flooded with identical updates.
+static void publish_if_changed(sensor::Sensor *s, float v) {
+  if (s != nullptr && (!s->has_state() || s->state != v))
+    s->publish_state(v);
+}
+static void publish_if_changed(binary_sensor::BinarySensor *s, bool v) {
+  if (s != nullptr && (!s->has_state() || s->state != v))
+    s->publish_state(v);
+}
+static void publish_if_changed(text_sensor::TextSensor *s, const std::string &v) {
+  if (s != nullptr && (!s->has_state() || s->state != v))
+    s->publish_state(v);
+}
+
 // Protocol constants, taken from trapacska/ditec-ion-gate-home-assistant (src/ble_gate.h).
 static const char *const SERVICE_UUID = "01FF0100-BA5E-F4EE-5CA1-EB1E5E4B1CE0";
 static const char *const CHAR_UUID = "01FF0101-BA5E-F4EE-5CA1-EB1E5E4B1CE0";
@@ -251,8 +266,7 @@ void DitecIonCover::handle_frame(const uint8_t *d, size_t n) {
       if (n < 10)
         return;
       this->gate_position_ = d[1];
-      if (this->operation_counter_ != nullptr)
-        this->operation_counter_->publish_state(d[9]);
+      publish_if_changed(this->operation_counter_, d[9]);
       break;
     }
     case FRAME_SYSTEM: {
@@ -261,20 +275,16 @@ void DitecIonCover::handle_frame(const uint8_t *d, size_t n) {
       char buf[96];
       snprintf(buf, sizeof(buf), "HW %u rev %u, FW %u.%u.%u, MAC %02X:%02X:%02X:%02X:%02X:%02X", d[4], d[5], d[6], d[7],
                d[8], d[41], d[40], d[39], d[38], d[37], d[36]);
-      if (this->board_info_ != nullptr)
-        this->board_info_->publish_state(buf);
+      publish_if_changed(this->board_info_, std::string(buf));
       this->have_sysinfo_ = true;
       return;
     }
     case FRAME_CONFIG: {
       if (n <= 50)
         return;
-      if (this->auto_close_ != nullptr)
-        this->auto_close_->publish_state(d[7] != 0);
-      if (this->auto_close_timer_ != nullptr)
-        this->auto_close_timer_->publish_state(d[8]);
-      if (this->partial_open_position_ != nullptr)
-        this->partial_open_position_->publish_state(d[25]);
+      publish_if_changed(this->auto_close_, d[7] != 0);
+      publish_if_changed(this->auto_close_timer_, d[8]);
+      publish_if_changed(this->partial_open_position_, d[25]);
       this->have_config_ = true;
       return;
     }
@@ -309,6 +319,9 @@ void DitecIonCover::update_cover_() {
   if (pos > cover::COVER_OPEN)
     pos = cover::COVER_OPEN;
 
+  if (this->published_ && this->current_operation == op && this->position == pos)
+    return;
+  this->published_ = true;
   this->current_operation = op;
   this->position = pos;
   this->publish_state(false);

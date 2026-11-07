@@ -66,6 +66,12 @@ cover:
     # reconnect_min_interval: 5s    # wait before retrying; doubles after each failed attempt ...
     # reconnect_max_interval: 5min  # ... up to this
     # notify: true   # only if the gate's characteristic has Notify (see Bring-up, step 2)
+    signal_strength:
+      name: "BLE signal"
+    signal_strength_percent:
+      name: "BLE signal strength"
+    signal_quality:
+      name: "BLE signal quality"
     operation_counter:
       name: "Operation counter"
     partial_open_position:
@@ -115,12 +121,6 @@ binary_sensor:
     lambda: 'return id(gate_client).connected();'
 
 sensor:
-  - platform: ble_client
-    ble_client_id: gate_client
-    type: rssi
-    name: "BLE signal"
-    entity_category: diagnostic
-    update_interval: 15s
   - platform: wifi_signal
     name: "Wi-Fi signal"
     entity_category: diagnostic

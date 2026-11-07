@@ -1,5 +1,6 @@
 #include "ditec_ion.h"
 #include <algorithm>
+#include <cmath>
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -70,6 +71,48 @@ void DitecIonCover::setup() {
   this->reconnect_backoff_ms_ = this->reconnect_min_ms_;
   this->set_interval("ditec_poll", POLL_TICK_MS, [this]() { this->poll_tick_(); });
   this->set_interval("ditec_reconnect", 1000, [this]() { this->reconnect_tick_(); });
+  if (this->signal_dbm_ != nullptr || this->signal_percent_ != nullptr || this->signal_quality_ != nullptr)
+    this->set_interval("ditec_rssi", this->rssi_interval_ms_, [this]() { this->poll_rssi_(); });
+}
+
+// ---- Bluetooth signal strength ---------------------------------------------------------------
+// dBm -> percent: -100 dBm (or worse) = 0 %, -50 dBm (or better) = 100 %, linear in between.
+// Quality text, from the percentage: >= 80 % (-60 dBm) Excellent, >= 50 % (-75 dBm) Good,
+// >= 30 % (-85 dBm) Weak, below that Poor. Disconnected -> "Disconnected" / unknown values.
+void DitecIonCover::poll_rssi_() {
+  if (!this->is_ready_())
+    return;
+  esp_err_t err = esp_ble_gap_read_rssi(this->parent()->get_remote_bda());
+  if (err != ESP_OK)
+    ESP_LOGW(TAG, "esp_ble_gap_read_rssi failed: %d", (int) err);
+}
+
+void DitecIonCover::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
+  if (event != ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT)
+    return;
+  if (!this->parent()->check_addr(param->read_rssi_cmpl.remote_addr))
+    return;
+  if (param->read_rssi_cmpl.status == ESP_BT_STATUS_SUCCESS)
+    this->publish_signal_(true, param->read_rssi_cmpl.rssi);
+}
+
+void DitecIonCover::publish_signal_(bool valid, int rssi) {
+  float dbm = NAN;
+  float pct = NAN;
+  const char *quality = "Disconnected";
+  if (valid) {
+    dbm = (float) rssi;
+    int p = std::max(0, std::min(100, (rssi + 100) * 2));
+    pct = (float) p;
+    quality = p >= 80 ? "Excellent" : p >= 50 ? "Good" : p >= 30 ? "Weak" : "Poor";
+  }
+  if (this->signal_dbm_ != nullptr && (!valid || !this->signal_dbm_->has_state() || this->signal_dbm_->state != dbm))
+    this->signal_dbm_->publish_state(dbm);
+  if (this->signal_percent_ != nullptr &&
+      (!valid || !this->signal_percent_->has_state() || this->signal_percent_->state != pct))
+    this->signal_percent_->publish_state(pct);
+  if (this->signal_quality_ != nullptr)
+    publish_if_changed(this->signal_quality_, std::string(quality));
 }
 
 // Connects the ble_client ourselves, with exponential back-off, so a gate that is out of range or
@@ -238,6 +281,7 @@ void DitecIonCover::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
                                                                              : ESP_GATT_WRITE_TYPE_RSP;
       this->connected_at_ = millis();
       this->next_init_ = this->connected_at_;
+      this->poll_rssi_();
       ESP_LOGI(TAG, "Gate characteristic found (handle 0x%04X, %s writes, props 0x%02X)", this->char_handle_,
                this->write_type_ == ESP_GATT_WRITE_TYPE_RSP ? "acknowledged" : "unacknowledged", chr->properties);
       if (this->notify_ && (chr->properties & ESP_GATT_CHAR_PROP_BIT_NOTIFY)) {
@@ -280,6 +324,7 @@ void DitecIonCover::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
     case ESP_GATTC_DISCONNECT_EVT:
     case ESP_GATTC_CLOSE_EVT: {
       this->reset_link_state_();
+      this->publish_signal_(false, 0);
       break;
     }
     default:

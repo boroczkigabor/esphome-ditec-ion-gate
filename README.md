@@ -35,7 +35,10 @@ work. See [Troubleshooting](#troubleshooting) and the known limitations below.
 | **Delete pairing** | Button | Drop the stored bond and reconnect (config) |
 | **BLE connection** | Switch | Enable / disable the ESP32's BLE connection to the gate (config) |
 | **BLE connected** | Binary sensor | Link state (diagnostic) |
-| **BLE signal** / **Wi-Fi signal** | Sensor | RSSI (diagnostic) |
+| **BLE signal** | Sensor | Bluetooth RSSI to the gate in dBm (diagnostic) |
+| **BLE signal strength** | Sensor | The same as a percentage: −100 dBm = 0 %, −50 dBm = 100 % (diagnostic) |
+| **BLE signal quality** | Text sensor | Excellent (≥ 80 %, about −60 dBm), Good (≥ 50 %, −75 dBm), Weak (≥ 30 %, −85 dBm), Poor, or Disconnected (diagnostic) |
+| **Wi-Fi signal** | Sensor | Wi-Fi RSSI (diagnostic) |
 | **Operation counter**, **Partial open position**, **Auto close timer** | Sensor | Read from the gate (diagnostic) |
 | **Auto close** | Binary sensor | Auto-close enabled (diagnostic) |
 | **Controller board** | Text sensor | Board hardware / firmware and MAC reported by the gate (diagnostic) |

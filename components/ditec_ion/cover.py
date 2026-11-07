@@ -1,7 +1,14 @@
 import esphome.codegen as cg
 from esphome.components import binary_sensor, ble_client, cover, sensor, text_sensor
 import esphome.config_validation as cv
-from esphome.const import CONF_NOTIFY, ENTITY_CATEGORY_DIAGNOSTIC, UNIT_PERCENT
+from esphome.const import (
+    CONF_NOTIFY,
+    DEVICE_CLASS_SIGNAL_STRENGTH,
+    ENTITY_CATEGORY_DIAGNOSTIC,
+    STATE_CLASS_MEASUREMENT,
+    UNIT_DECIBEL_MILLIWATT,
+    UNIT_PERCENT,
+)
 
 from . import ditec_ion_ns
 
@@ -13,6 +20,10 @@ CONF_PARTIAL_OPEN_POSITION = "partial_open_position"
 CONF_AUTO_CLOSE_TIMER = "auto_close_timer"
 CONF_AUTO_CLOSE = "auto_close"
 CONF_BOARD_INFO = "board_info"
+CONF_SIGNAL_STRENGTH = "signal_strength"
+CONF_SIGNAL_PERCENT = "signal_strength_percent"
+CONF_SIGNAL_QUALITY = "signal_quality"
+CONF_RSSI_UPDATE_INTERVAL = "rssi_update_interval"
 CONF_RECONNECT_MIN_INTERVAL = "reconnect_min_interval"
 CONF_RECONNECT_MAX_INTERVAL = "reconnect_max_interval"
 
@@ -36,6 +47,28 @@ CONFIG_SCHEMA = (
             cv.Optional(
                 CONF_RECONNECT_MAX_INTERVAL, default="5min"
             ): cv.positive_time_period_milliseconds,
+            # Bluetooth link quality to the gate (only updates while connected).
+            cv.Optional(
+                CONF_RSSI_UPDATE_INTERVAL, default="15s"
+            ): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_SIGNAL_STRENGTH): sensor.sensor_schema(
+                unit_of_measurement=UNIT_DECIBEL_MILLIWATT,
+                device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
+                state_class=STATE_CLASS_MEASUREMENT,
+                accuracy_decimals=0,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_SIGNAL_PERCENT): sensor.sensor_schema(
+                unit_of_measurement=UNIT_PERCENT,
+                icon="mdi:signal",
+                state_class=STATE_CLASS_MEASUREMENT,
+                accuracy_decimals=0,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_SIGNAL_QUALITY): text_sensor.text_sensor_schema(
+                icon="mdi:signal",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
             cv.Optional(CONF_OPERATION_COUNTER): sensor.sensor_schema(
                 accuracy_decimals=0,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
@@ -71,6 +104,16 @@ async def to_code(config):
     cg.add(var.set_reconnect_min_interval(config[CONF_RECONNECT_MIN_INTERVAL]))
     cg.add(var.set_reconnect_max_interval(config[CONF_RECONNECT_MAX_INTERVAL]))
 
+    cg.add(var.set_rssi_update_interval(config[CONF_RSSI_UPDATE_INTERVAL]))
+    if conf := config.get(CONF_SIGNAL_STRENGTH):
+        sens = await sensor.new_sensor(conf)
+        cg.add(var.set_signal_strength_sensor(sens))
+    if conf := config.get(CONF_SIGNAL_PERCENT):
+        sens = await sensor.new_sensor(conf)
+        cg.add(var.set_signal_percent_sensor(sens))
+    if conf := config.get(CONF_SIGNAL_QUALITY):
+        sens = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_signal_quality_text_sensor(sens))
     if conf := config.get(CONF_OPERATION_COUNTER):
         sens = await sensor.new_sensor(conf)
         cg.add(var.set_operation_counter_sensor(sens))

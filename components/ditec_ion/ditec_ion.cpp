@@ -56,6 +56,9 @@ static const uint8_t STATUS_OPEN = 0x03;
 static const uint8_t STATUS_CLOSING = 0x07;
 static const uint8_t STATUS_OPENING = 0x08;
 static const uint8_t STATUS_IR_REVERSING = 0x0B;
+// Seen on a real ION6B between "closing" (0x07) and "closed" (0x01), position ~1 %: the final
+// settling phase of a close. Treated as still closing so the cover does not flip to "open" for 2 s.
+static const uint8_t STATUS_CLOSING_FINISH = 0x0A;
 
 static const uint32_t POLL_TICK_MS = 500;      // alternate status / position: 1 s normally, 0.5 s while moving
 static const uint32_t FAST_POLL_HOLD_MS = 5000;
@@ -376,7 +379,8 @@ void DitecIonCover::handle_frame(const uint8_t *d, size_t n) {
   }
 
   const uint8_t s = this->gate_status_;
-  if (s == STATUS_OPENING || s == STATUS_CLOSING || s == STATUS_IR_REVERSING || s == STATUS_TRANSITIONING)
+  if (s == STATUS_OPENING || s == STATUS_CLOSING || s == STATUS_CLOSING_FINISH || s == STATUS_IR_REVERSING ||
+      s == STATUS_TRANSITIONING)
     this->fast_until_ = millis() + FAST_POLL_HOLD_MS;
   this->update_cover_();
 }
@@ -388,7 +392,7 @@ void DitecIonCover::update_cover_() {
   auto op = cover::COVER_OPERATION_IDLE;
   if (s == STATUS_OPENING || s == STATUS_IR_REVERSING || s == STATUS_TRANSITIONING)
     op = cover::COVER_OPERATION_OPENING;
-  else if (s == STATUS_CLOSING)
+  else if (s == STATUS_CLOSING || s == STATUS_CLOSING_FINISH)
     op = cover::COVER_OPERATION_CLOSING;
 
   float pos = p / 100.0f;

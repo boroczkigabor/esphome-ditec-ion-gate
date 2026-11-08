@@ -21,9 +21,11 @@ the MQTT variant, use the original.
 
 ## Status
 
-**Experimental.** The code was written against the ESPHome sources and the original firmware, and
-has not been checked against every gate. Please open an issue with your log if something does not
-work. See [Troubleshooting](#troubleshooting) and the known limitations below.
+**Working.** Tested on a real Ditec ION6B: pairing with the PIN, status and position updates, and
+open, close, partial open and the signal diagnostics all work. The gate's replies arrive as writes
+into the ESP32's own GATT server, which ESPHome's ESP-IDF Bluetooth stack does deliver on a link the
+ESP32 opened itself. Other gates and modules are untested; please open an issue with a verbose log
+if something does not work. See [Troubleshooting](#troubleshooting).
 
 ## What you get
 
@@ -126,8 +128,13 @@ shows its real state.
 | Closed | `closed` |
 | Open / Partial open | `open` |
 | Opening, IR reversing, transitioning | `opening` |
-| Closing | `closing` |
+| Closing, closing finish (0x0A) | `closing` |
 | Stopped | `open`, idle, at the last reported position |
+
+Status codes seen on a real gate: `0x01` closed, `0x09` partial open, `0x07` closing, `0x0A` the
+last moments of a close (position about 1 %), and the codes from the original project (`0x00`,
+`0x03`, `0x05`, `0x08`, `0x0B`). The position (0–100 %) comes from a separate frame and is
+published together with the state.
 
 The cover only supports open, close and stop. Setting an arbitrary position is ignored; use the
 **Partial open** button.
@@ -165,9 +172,13 @@ Raise the log level to see the Bluetooth trace (see the commented `logs:` block 
   firmware discovers them only after pairing finishes. Try **Delete pairing**, and report the log.
 - **Pairing fails:** check the PIN; press **Delete pairing**. The original firmware also
   distributes the LINK key, which ESPHome does not expose.
-- **Connected, but no status updates ("Status 0x.." lines never appear):** the gate is not writing
-  into the ESP32's GATT server on this connection. Check with a BLE scanner such as nRF Connect
-  whether the gate's characteristic supports Notify; if so, set `notify: true` on the cover.
+- **Connected, but no status updates ("Status 0x.." lines never appear):** this works on a tested
+  ION6B, so first check the pairing (above) and the signal. If it still happens, check with a BLE
+  scanner such as nRF Connect whether the gate's characteristic supports Notify; if so, set
+  `notify: true` on the cover, which feeds notifications into the same parser.
+- **Device falls back to an older firmware after an OTA update** ("OTA rollback detected" in the
+  log): ESPHome only accepts a new firmware after it has run for a minute. Do not unplug or
+  power-cycle the ESP32 within the first minute after an update.
 - **Position looks wrong:** after a gate power cycle the position is invalid until one full open
   followed by one full close.
 

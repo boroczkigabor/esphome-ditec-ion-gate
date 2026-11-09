@@ -94,6 +94,11 @@ button:
     icon: mdi:gate-open
     on_press:
       - lambda: 'id(gate).command_partial_open();'
+  # Reboots the ESP32. Do not use it within the first minute after an OTA update (see README).
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+
   # Clears the stored bond and reconnects (use after changing the PIN in the app).
   - platform: template
     name: "Delete pairing"

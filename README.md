@@ -35,6 +35,7 @@ if something does not work. See [Troubleshooting](#troubleshooting).
 | **Light** | Button | Toggle the courtesy light |
 | **Partial open** | Button | Open to the partial-open position configured on the gate |
 | **Delete pairing** | Button | Drop the stored bond and reconnect (config) |
+| **Restart** | Button | Reboot the ESP32 (config) |
 | **BLE connection** | Switch | Enable / disable the ESP32's BLE connection to the gate (config) |
 | **BLE connected** | Binary sensor | Link state (diagnostic) |
 | **BLE signal** | Sensor | Bluetooth RSSI to the gate in dBm (diagnostic) |

@@ -2,6 +2,12 @@
 # Not a standalone config - include it from esphome.yaml via `packages:` (see README.md).
 # Expects the substitutions ditec_gate_mac and ditec_gate_pin, and the `ditec_ion` external
 # component, to be provided by the including file.
+#
+# Optional substitution (default below), override it in the including file's `substitutions:`:
+#   random_ble_address: "true"   # new random Bluetooth address on every boot, see README.md
+
+substitutions:
+  random_ble_address: "false"
 
 # ---------------------------------------------------------------------------------------------
 # Bluetooth: LE Secure Connections + MITM + bonding, passkey entry (matches the original
@@ -16,9 +22,9 @@ esp32_ble_tracker:
 ble_client:
   - id: gate_client
     mac_address: ${ditec_gate_mac}
-    # The ditec_ion component connects (and reconnects, with back-off) itself, so that a gate that
-    # is out of range or refuses pairing is not flooded with connection attempts. Keep this false.
-    auto_connect: false
+    # Keep this true: ESPHome's tracker does the connecting. The ditec_ion component only pauses
+    # it between failed attempts (reconnect_min_interval / reconnect_max_interval below).
+    auto_connect: true
     on_connect:
       - logger.log: "Gate: connected (service discovery complete)"
     on_disconnect:
@@ -54,32 +60,6 @@ esp32_ble_server:
             then:
               - lambda: |-
                   id(gate).handle_frame(x);
-esphome:
-  name: ditec-gate-client
-  on_boot:
-    priority: 850
-    then:
-      - lambda: |-
-          #include "esp_system.h"
-          #include "esp_bt.h"
-          
-          // Generate random bytes for the custom MAC address
-          uint8_t random_mac[6];
-          for(int i = 0; i < 6; i++) {
-            random_mac[i] = esp_random() & 0xFF;
-          }
-          // Ensure it is a locally administered, unicast address (clear bit 0 of first byte)
-          random_mac[0] = (random_mac[0] & 0xFE); 
-
-          // Set base MAC address before any stack init
-          esp_err_t err = esp_base_mac_addr_set(random_mac);
-          if (err == ESP_OK) {
-            ESP_LOGD("custom_mac", "Successfully set random BLE MAC address: %02X:%02X:%02X:%02X:%02X:%02X",
-                     random_mac[0], random_mac[1], random_mac[2], 
-                     random_mac[3], random_mac[4], random_mac[5]);
-          } else {
-            ESP_LOGE("custom_mac", "Failed to set random BLE MAC address, error code: %d", err);
-          }
 
 # ---------------------------------------------------------------------------------------------
 # Entities
@@ -89,6 +69,7 @@ cover:
     id: gate
     name: None
     ble_client_id: gate_client
+    random_ble_address: ${random_ble_address}  # default false; see README before enabling
     # reconnect_min_interval: 5s    # wait before retrying; doubles after each failed attempt ...
     # reconnect_max_interval: 5min  # ... up to this
     # notify: true   # only if the gate's characteristic has Notify (see Bring-up, step 2)

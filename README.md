@@ -148,13 +148,41 @@ correct.
 
 ## Reconnecting
 
-The `ble_client` is set to `auto_connect: false` and the component connects it itself, with back-off,
-so a gate that is out of range or refuses pairing is not flooded with connection attempts (a
-stuck ESP32 can occupy the gate's single Bluetooth connection and lock your phone out). After a
-failed attempt the wait doubles, from `reconnect_min_interval` (default 5 s) up to
-`reconnect_max_interval` (default 5 min). After a link that worked, the next attempt happens after
-the minimum interval. Keep `auto_connect: false` in your `ble_client`; the **BLE connection**
-switch still turns connecting on and off.
+The `ble_client` keeps `auto_connect: true`, so ESPHome's Bluetooth tracker does the connecting (it
+stops scanning first and manages Wi-Fi / Bluetooth coexistence). The component only throttles it, so
+a gate that is out of range or refuses pairing is not flooded with connection attempts (a stuck ESP32
+can occupy the gate's single Bluetooth connection and lock your phone out). After a failed attempt
+the wait doubles, from `reconnect_min_interval` (default 5 s) up to `reconnect_max_interval`
+(default 5 min). After a link that worked, the next attempt happens after the minimum interval.
+The **BLE connection** switch still turns connecting on and off.
+
+## Random Bluetooth address (optional)
+
+If your gate seems to refuse your ESP32 after a while but still accepts your phone, you can try
+a new random Bluetooth address on every boot:
+
+Set the substitution in your `esphome.yaml`; the package passes it on to the component:
+
+```yaml
+substitutions:
+  random_ble_address: "true"   # default: "false"
+```
+
+Only the Bluetooth address changes (Wi-Fi and Home Assistant keep seeing the same device). The log
+shows the chosen address (`Using random Bluetooth address …`), and the `BLE:` block of the startup
+log lists it as `MAC address`.
+
+Things to know before enabling it:
+
+- **Pairing on every boot.** The gate sees a new device each time, so the ESP32 pairs with the PIN
+  at every start. The old bond for the gate is removed on the ESP32 before connecting.
+- **The gate may remember every address.** Each boot may add a new paired device on the gate. If
+  the gate has a limited list, it could fill up and push out your phone. Not known for the RCB100,
+  so try it, and check your phone still connects afterwards.
+- **Not a certain fix.** Whether the gate filters by address is only a theory. If the first
+  connection attempts after a boot fail as before, address filtering is not the cause.
+- Needs the ESP-IDF option `CONFIG_ESP_MAC_ADDR_UNIVERSE_BT` (enabled by default). If setting the
+  address fails, the log says so and the normal address is used.
 
 ## Signal strength
 

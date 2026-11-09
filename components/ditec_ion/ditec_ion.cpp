@@ -4,6 +4,8 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
+#include <esp_mac.h>
+#include <esp_random.h>
 
 #ifdef USE_ESP32
 
@@ -69,11 +71,13 @@ static const uint32_t TX_TIMEOUT_MS = 2000;
 static const size_t TX_QUEUE_MAX = 8;
 
 void DitecIonCover::setup() {
+  if (this->random_address_)
+    this->apply_random_ble_address_();
   this->position = cover::COVER_CLOSED;
   this->current_operation = cover::COVER_OPERATION_IDLE;
   this->reconnect_backoff_ms_ = this->reconnect_min_ms_;
   this->set_interval("ditec_poll", POLL_TICK_MS, [this]() { this->poll_tick_(); });
-  this->set_interval("ditec_reconnect", 1000, [this]() { this->reconnect_tick_(); });
+  this->set_interval("ditec_reconnect", 200, [this]() { this->reconnect_tick_(); });
   if (this->signal_dbm_ != nullptr || this->signal_percent_ != nullptr || this->signal_quality_ != nullptr)
     this->set_interval("ditec_rssi", this->rssi_interval_ms_, [this]() { this->poll_rssi_(); });
 }
@@ -118,40 +122,83 @@ void DitecIonCover::publish_signal_(bool valid, int rssi) {
     publish_if_changed(this->signal_quality_, std::string(quality));
 }
 
-// Connects the ble_client ourselves, with exponential back-off, so a gate that is out of range or
-// refuses pairing is not hammered with connection attempts. After a link that worked (at least one
-// valid frame was received) the next attempt is made after the minimum interval.
+// Random Bluetooth address (opt-in). Must run before the Bluetooth controller starts, which is why
+// this component sets up early (get_setup_priority). Only the BT address changes, not Wi-Fi's.
+void DitecIonCover::apply_random_ble_address_() {
+  uint8_t mac[6];
+  esp_fill_random(mac, sizeof(mac));
+  mac[0] = (mac[0] & 0xFC) | 0x02;  // unicast, locally administered
+  esp_err_t err = esp_iface_mac_addr_set(mac, ESP_MAC_BT);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Setting a random Bluetooth address failed: %d", (int) err);
+    this->random_address_ = false;
+    return;
+  }
+  ESP_LOGI(TAG, "Using random Bluetooth address %02X:%02X:%02X:%02X:%02X:%02X for this boot", mac[0], mac[1],
+           mac[2], mac[3], mac[4], mac[5]);
+  // The gate's old bond belongs to the previous address, so it must be dropped before connecting;
+  // connecting is held back until reconnect_tick_() has done that.
+  this->parent()->set_auto_connect(false);
+  this->holding_ = true;
+  this->bond_cleared_ = false;
+}
+
+// Throttles connection attempts so a gate that is out of range or refuses pairing is not flooded.
+// The ble_client keeps auto_connect: true, so ESPHome's tracker does the actual connecting (it stops
+// the scan first and handles Wi-Fi/Bluetooth coexistence). We only switch auto_connect off for the
+// back-off period after an attempt or link has ended. After a link that worked (at least one valid
+// frame was received) the pause is the minimum interval; after failures it doubles up to the maximum.
 void DitecIonCover::reconnect_tick_() {
   auto *client = this->parent();
-  if (!client->enabled || client->state() != espbt::ClientState::IDLE) {
-    this->connect_pending_ = false;
-    return;
-  }
   const uint32_t now = millis();
-  if (!this->connect_pending_) {
-    uint32_t delay;
-    if (this->last_link_good_) {
-      this->reconnect_backoff_ms_ = this->reconnect_min_ms_;
-      delay = this->reconnect_min_ms_;
-    } else {
-      delay = this->reconnect_backoff_ms_;
-      this->reconnect_backoff_ms_ = std::min(this->reconnect_backoff_ms_ * 2, this->reconnect_max_ms_);
-    }
-    this->last_link_good_ = false;
-    this->next_connect_ = now + delay;
-    this->connect_pending_ = true;
-    ESP_LOGD(TAG, "Next connection attempt in %u ms", (unsigned) delay);
+  const auto st = client->state();
+
+  if (st != espbt::ClientState::IDLE) {
+    if (st != espbt::ClientState::INIT)
+      this->attempt_seen_ = true;  // an attempt or a link is in progress, or being torn down
     return;
   }
-  if ((int32_t) (now - this->next_connect_) >= 0) {
-    this->connect_pending_ = false;
-    client->connect();
+
+  if (this->holding_) {
+    if (this->random_address_ && !this->bond_cleared_) {
+      if (client->get_gattc_if() == ESP_GATT_IF_NONE)
+        return;  // Bluetooth stack not up yet
+      esp_err_t err = esp_ble_remove_bond_device(client->get_remote_bda());
+      ESP_LOGD(TAG, "Removed old bond for the new address: %d", (int) err);
+      this->bond_cleared_ = true;
+      this->next_connect_ = now;
+    }
+    if ((int32_t) (now - this->next_connect_) >= 0) {
+      this->holding_ = false;
+      client->set_auto_connect(true);
+      ESP_LOGD(TAG, "Connection attempts allowed");
+    }
+    return;
   }
+
+  if (!this->attempt_seen_)
+    return;  // nothing tried yet: let the first attempt happen immediately
+  this->attempt_seen_ = false;
+
+  uint32_t delay;
+  if (this->last_link_good_) {
+    this->reconnect_backoff_ms_ = this->reconnect_min_ms_;
+    delay = this->reconnect_min_ms_;
+  } else {
+    delay = this->reconnect_backoff_ms_;
+    this->reconnect_backoff_ms_ = std::min(this->reconnect_backoff_ms_ * 2, this->reconnect_max_ms_);
+  }
+  this->last_link_good_ = false;
+  this->holding_ = true;
+  this->next_connect_ = now + delay;
+  client->set_auto_connect(false);
+  ESP_LOGD(TAG, "Next connection attempt in %u ms", (unsigned) delay);
 }
 
 void DitecIonCover::dump_config() {
   LOG_COVER("", "Ditec ION Cover", this);
   ESP_LOGCONFIG(TAG, "  Notifications: %s", YESNO(this->notify_));
+  ESP_LOGCONFIG(TAG, "  Random Bluetooth address: %s", YESNO(this->random_address_));
   ESP_LOGCONFIG(TAG, "  Reconnect interval: %u ms .. %u ms", (unsigned) this->reconnect_min_ms_,
                 (unsigned) this->reconnect_max_ms_);
 }

@@ -24,6 +24,7 @@ CONF_SIGNAL_STRENGTH = "signal_strength"
 CONF_SIGNAL_PERCENT = "signal_strength_percent"
 CONF_SIGNAL_QUALITY = "signal_quality"
 CONF_RSSI_UPDATE_INTERVAL = "rssi_update_interval"
+CONF_RANDOM_BLE_ADDRESS = "random_ble_address"
 CONF_RECONNECT_MIN_INTERVAL = "reconnect_min_interval"
 CONF_RECONNECT_MAX_INTERVAL = "reconnect_max_interval"
 
@@ -39,8 +40,9 @@ CONFIG_SCHEMA = (
             # property) and feed them to the same frame parser. Off by default: the original
             # project receives frames only via the ESP32's own GATT server (esp32_ble_server).
             cv.Optional(CONF_NOTIFY, default=False): cv.boolean,
-            # Back-off between connection attempts. The attached ble_client must be configured with
-            # `auto_connect: false`; this component then connects it itself.
+            # Use a new random Bluetooth address on every boot (see README before enabling).
+            cv.Optional(CONF_RANDOM_BLE_ADDRESS, default=False): cv.boolean,
+            # Back-off between connection attempts (the attached ble_client keeps auto_connect: true).
             cv.Optional(
                 CONF_RECONNECT_MIN_INTERVAL, default="5s"
             ): cv.positive_time_period_milliseconds,
@@ -101,6 +103,7 @@ async def to_code(config):
     await ble_client.register_ble_node(var, config)
 
     cg.add(var.set_notify(config[CONF_NOTIFY]))
+    cg.add(var.set_random_address(config[CONF_RANDOM_BLE_ADDRESS]))
     cg.add(var.set_reconnect_min_interval(config[CONF_RECONNECT_MIN_INTERVAL]))
     cg.add(var.set_reconnect_max_interval(config[CONF_RECONNECT_MAX_INTERVAL]))
 

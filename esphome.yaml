@@ -22,8 +22,10 @@ substitutions:
   friendly_name: Ditec Gate
   ditec_gate_mac: !secret ditec_gate__mac
   ditec_gate_pin: !secret ditec_gate__pin
+  # New random Bluetooth address on every boot (default "false"; read the README before enabling).
+  random_ble_address: "false"
 
-# Load the component from your GitHub repository. components/ditec_ion/ must be at the repo root.
+# The ditec_ion component. Pin to a tag or commit (@v1.0.0) once you have a working setup.
 external_components:
   - source: github://boroczkigabor/esphome-ditec-ion-gate@main
     components: [ditec_ion]

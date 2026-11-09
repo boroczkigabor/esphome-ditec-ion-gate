@@ -22,6 +22,7 @@ namespace espbt = esphome::esp32_ble_tracker;
 class DitecIonCover : public cover::Cover, public Component, public ble_client::BLEClientNode {
  public:
   void setup() override;
+  float get_setup_priority() const override { return setup_priority::HARDWARE; }  // before Bluetooth starts
   void loop() override {}  // work is done from a timer; this is also what BLEClientNode::loop() resolves to
   void dump_config() override;
 
@@ -48,6 +49,7 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   void set_signal_strength_sensor(sensor::Sensor *s) { this->signal_dbm_ = s; }
   void set_signal_percent_sensor(sensor::Sensor *s) { this->signal_percent_ = s; }
   void set_signal_quality_text_sensor(text_sensor::TextSensor *s) { this->signal_quality_ = s; }
+  void set_random_address(bool v) { this->random_address_ = v; }
   void set_reconnect_min_interval(uint32_t ms) { this->reconnect_min_ms_ = ms; }
   void set_reconnect_max_interval(uint32_t ms) { this->reconnect_max_ms_ = ms; }
   void set_operation_counter_sensor(sensor::Sensor *s) { this->operation_counter_ = s; }
@@ -67,6 +69,7 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   void reset_link_state_();
   void update_cover_();
   void reconnect_tick_();
+  void apply_random_ble_address_();
   void poll_rssi_();
   void publish_signal_(bool valid, int rssi);
 
@@ -100,7 +103,10 @@ class DitecIonCover : public cover::Cover, public Component, public ble_client::
   uint32_t reconnect_max_ms_{300000};
   uint32_t reconnect_backoff_ms_{5000};
   uint32_t next_connect_{0};
-  bool connect_pending_{false};
+  bool holding_{false};       // auto_connect switched off during the back-off
+  bool attempt_seen_{false};  // the client left IDLE since the last back-off
+  bool random_address_{false};
+  bool bond_cleared_{true};
   bool last_link_good_{false};  // the previous link delivered at least one valid frame
 
   uint32_t rssi_interval_ms_{15000};

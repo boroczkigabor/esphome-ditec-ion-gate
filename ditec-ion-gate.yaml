@@ -57,20 +57,21 @@ esp32_ble_server:
 esphome:
   name: ditec-gate-client
   on_boot:
-    priority: 800
+    priority: 850
     then:
       - lambda: |-
           #include "esp_system.h"
+          #include "esp_bt.h"
           
           // Generate random bytes for the custom MAC address
           uint8_t random_mac[6];
           for(int i = 0; i < 6; i++) {
             random_mac[i] = esp_random() & 0xFF;
           }
-          // Ensure it is a locally administered, unicast address (set bit 1, clear bit 0)
-          random_mac[0] = (random_mac[0] & 0xFC) | 0x02;
+          // Ensure it is a locally administered, unicast address (clear bit 0 of first byte)
+          random_mac[0] = (random_mac[0] & 0xFE); 
 
-          // Use esp_base_mac_addr_set with proper system header included
+          // Set base MAC address before any stack init
           esp_err_t err = esp_base_mac_addr_set(random_mac);
           if (err == ESP_OK) {
             ESP_LOGD("custom_mac", "Successfully set random BLE MAC address: %02X:%02X:%02X:%02X:%02X:%02X",

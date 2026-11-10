@@ -156,6 +156,10 @@ the wait doubles, from `reconnect_min_interval` (default 5 s) up to `reconnect_m
 (default 5 min). After a link that worked, the next attempt happens after the minimum interval.
 The **BLE connection** switch still turns connecting on and off.
 
+On a planned restart (the **Restart** button, an OTA update, a software reboot) the component first
+closes the Bluetooth link to the gate and waits 300 ms, so the gate sees a normal disconnect instead
+of a link that went silent. Power loss, crashes and watchdog resets cannot do this.
+
 ## Random Bluetooth address (optional)
 
 If your gate seems to refuse your ESP32 after a while but still accepts your phone, you can try

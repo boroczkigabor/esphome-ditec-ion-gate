@@ -195,6 +195,21 @@ void DitecIonCover::reconnect_tick_() {
   ESP_LOGD(TAG, "Next connection attempt in %u ms", (unsigned) delay);
 }
 
+void DitecIonCover::on_shutdown() {
+  auto *client = this->parent();
+  if (client == nullptr)
+    return;
+  // Stop the tracker from starting a new connection during the last milliseconds.
+  client->set_auto_connect(false);
+  if (!client->connected())
+    return;
+  ESP_LOGI(TAG, "Shutting down: disconnecting from the gate");
+  client->disconnect();
+  // The reset follows right after the shutdown hooks and the main loop (which processes the BLE
+  // events) is not running here, so give the controller time to send the link termination.
+  delay(300);
+}
+
 void DitecIonCover::dump_config() {
   LOG_COVER("", "Ditec ION Cover", this);
   ESP_LOGCONFIG(TAG, "  Notifications: %s", YESNO(this->notify_));
